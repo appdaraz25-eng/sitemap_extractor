@@ -1,0 +1,102 @@
+# .github/workflows/daily_extraction.yml
+# Runs every day at 06:00 AM Bangladesh Standard Time (= 00:00 UTC)
+
+name: Daily Sitemap Extraction
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 00:00 UTC = 06:00 AM BST (UTC+6)
+  workflow_dispatch:        # Allow manual trigger from GitHub UI
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    permissions:
+      contents: write       # Needed to commit output files back to repo
+
+    steps:
+      # ── 1. Checkout the repository ─────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Set up Python ───────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # ── 3. Install system dependencies (virtual display for PyQt6) ─────────
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libxcb-xfixes0 libgl1-mesa-glx libegl1
+
+      # ── 4. Install Python packages ─────────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            aiohttp \
+            pandas \
+            openpyxl \
+            beautifulsoup4 \
+            python-dateutil \
+            PyQt6 \
+            qasync \
+            requests \
+            validators \
+            lxml \
+            pytz \
+            tqdm
+
+      # ── 5. Show Bangladesh time (for log readability) ──────────────────────
+      - name: Show Bangladesh time
+        run: |
+          python -c "
+          from datetime import datetime
+          import pytz
+          bdt = pytz.timezone('Asia/Dhaka')
+          print('Run time (BD):', datetime.now(bdt).strftime('%Y-%m-%d %H:%M:%S %Z'))
+          "
+
+      # ── 6. Run the extractor (headless, async, 100% URLs) ──────────────────
+      - name: Run Sitemap Extractor
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" \
+            python sitemap_extractor.py \
+              --headless \
+              --async-mode \
+              --percent 100 \
+              --sites sites.txt
+        env:
+          DISPLAY: ':99'
+          QT_QPA_PLATFORM: offscreen
+
+      # ── 7. Commit output files back to the repository ──────────────────────
+      - name: Commit output files
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add *.xlsx *.db || true
+          git diff --staged --quiet || git commit -m "chore: auto-update extraction data $(date +'%Y-%m-%d %H:%M UTC')"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 8. Upload as artifact (downloadable for 30 days) ───────────────────
+      - name: Upload extraction artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extraction-results-${{ github.run_number }}
+          path: |
+            *.xlsx
+            *.db
+          retention-days: 30

@@ -1,0 +1,12 @@
+# sites.txt
+# Add your website URLs here — one per line.
+# Lines starting with # are ignored.
+# -----------------------------------------------
+# REPLACE the examples below with your own sites!
+# -----------------------------------------------
+
+https://www.prothomalo.com
+https://www.thedailystar.net
+https://www.bdnews24.com
+https://www.kalerkantho.com
+https://www.ittefaq.com.bd
