@@ -1,0 +1,9 @@
+[
+    {
+        "domain": "https://banglaediton.com",
+        "output_file": "output/banglaedition.xlsx",
+        "db_file": "databases/banglaedition.db",
+        "enabled": true,
+        "process_percentage": 100.0
+    }
+]
