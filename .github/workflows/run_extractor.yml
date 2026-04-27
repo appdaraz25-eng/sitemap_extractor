@@ -1,1 +1,94 @@
+name: Daily Sitemap Extractor
 
+on:
+  schedule:
+    # Run at 6 AM Bangladesh Time (UTC+6)
+    # This is 00:00 UTC (since 6 AM BDT = 00:00 UTC)
+    - cron: '00 00 * * *'
+  workflow_dispatch:
+    # Allows manual triggering from GitHub UI
+
+jobs:
+  extract-sitemaps:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install aiohttp pandas pytz tqdm beautifulsoup4 lxml openpyxl requests python-dateutil validators schedule
+    
+    - name: Create necessary directories
+      run: |
+        mkdir -p output
+        mkdir -p databases
+        mkdir -p logs
+    
+    - name: Create default config if not exists
+      run: |
+        if [ ! -f sites_config.json ]; then
+          echo '[
+            {
+              "domain": "https://example.com",
+              "output_file": "output/example.xlsx",
+              "db_file": "databases/example.db",
+              "enabled": false,
+              "process_percentage": 100.0
+            }
+          ]' > sites_config.json
+          echo "Default config created. Please update sites_config.json with your websites."
+        fi
+    
+    - name: Run sitemap extractor
+      run: python sitemap_extractor.py --run-now
+    
+    - name: Upload extraction logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: extraction-logs
+        path: |
+          sitemap_extractor.log
+          logs/
+        retention-days: 7
+    
+    - name: Upload Excel files
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: excel-outputs
+        path: output/*.xlsx
+        retention-days: 30
+    
+    - name: Upload Database files
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: database-files
+        path: databases/*.db
+        retention-days: 30
+    
+    - name: Commit and push changes (if any)
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add output/*.xlsx databases/*.db
+        git diff --staged --quiet || git commit -m "Auto-update: Daily sitemap extraction [skip ci]"
+        git push
+      continue-on-error: true
